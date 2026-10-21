@@ -52,6 +52,7 @@ contract VaultLend {
     event CollateralDeposited(address indexed user, uint256 amount);
     event Borrowed(address indexed user, uint256 amount);
     event InterestAccrued(address indexed user, uint256 interest);
+    event Repaid(address indexed user, uint256 amount);
     
     // --------------------------------------------------
     // CONSTRUCTOR
@@ -270,5 +271,35 @@ contract VaultLend {
         usdc.safeTransfer(msg.sender, amount);
 
         emit Borrowed(msg.sender, amount);
+    }
+
+    // --------------------------------------------------
+    // REPAY USDC DEBT
+    // --------------------------------------------------
+
+    function repay(uint256 amount) public {
+        require(amount > 0, "Amount must be greater than zero");
+
+        _accrueInterest(msg.sender);
+
+        BorrowerPosition storage position = positions[msg.sender];
+        uint256 totalDebt = position.borrowedPrincipal + position.accruedInterest;
+
+        require(totalDebt > 0, "No debt to repay");
+        require(amount <= totalDebt, "Repayment exceeds debt");
+
+        if (amount <= position.accruedInterest) {
+            position.accruedInterest -= amount;
+        } else {
+            uint256 remaining = amount - position.accruedInterest;
+            position.accruedInterest = 0;
+            position.borrowedPrincipal -= remaining;
+        }
+
+        position.lastAccrualTime = block.timestamp;
+
+        usdc.safeTransferFrom(msg.sender, address(this), amount);
+
+        emit Repaid(msg.sender, amount);
     }
 }

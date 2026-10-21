@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VaultLend — Overcollateralized DeFi Lending Protocol</title>
+  <meta name="description" content="Non-custodial, overcollateralized lending protocol built on Ethereum with WETH collateral, USDC borrowing, Chainlink oracle integration, and 75% max LTV.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Ethers.js v6 CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js" integrity="sha512-V1nSg1sWwJzJ9YqJ+v6g5K0mE6F3M4Yq3z1k7W2C8v9Q0r9P4eFz3B8w=" crossorigin="anonymous"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text">
+          <h1>VaultLend</h1>
+          <div class="brand-tagline">
+            <span>DeFi Protocol</span>
+            <span>•</span>
+            <span id="network-badge" style="color: #a5b4fc;">Simulation Sandbox (Offline)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Live Chainlink Oracle Pill -->
+        <div class="live-oracle-badge" title="Live Chainlink Price Feed (WETH/USD)">
+          <div class="pulse-dot"></div>
+          <span id="oracle-price-display">ETH/USD: $2,000</span>
+        </div>
+
+        <!-- Mode Toggle -->
+        <div class="mode-pill">
+          <button id="mode-demo-btn" class="mode-btn active" title="Run offline simulation for presentations">Demo Mode</button>
+          <button id="mode-live-btn" class="mode-btn" title="Connect to MetaMask / Anvil node">Web3 Live</button>
+        </div>
+
+        <!-- Config / Settings -->
+        <button id="open-config-btn" class="btn btn-secondary btn-sm" title="Configure contract addresses">⚙️ Config</button>
+
+        <!-- Connect Wallet Button -->
+        <button id="connect-wallet-btn" class="btn btn-primary">
+          <span>Connect Wallet</span>
+          <span id="wallet-address-badge"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="app-main">
+
+    <!-- Presentation Bar -->
+    <section class="presentation-bar">
+      <div class="presentation-info">
+        <span class="presentation-badge">Professor / Demo Mode</span>
+        <span class="presentation-text">
+          Quickly showcase core protocol mechanics: collateral valuation, borrowing limits, and interest accrual.
+        </span>
+      </div>
+      <div class="preset-pills">
+        <button id="preset-clean-btn" class="preset-btn">Fresh Account</button>
+        <button id="preset-healthy-btn" class="preset-btn active">Healthy (2 WETH)</button>
+        <button id="preset-risk-btn" class="preset-btn">Near Liquidation</button>
+        <button id="reset-demo-btn" class="preset-btn" title="Reset presentation state">↺ Reset</button>
+      </div>
+    </section>
+
+    <!-- Protocol Top Stats Row -->
+    <section class="protocol-stats-grid">
+      <div class="glass-panel stat-card">
+        <div class="stat-label">
+          <span>Total Value Locked (TVL)</span>
+          <span>🔒</span>
+        </div>
+        <div id="stat-tvl" class="stat-value">$240,000</div>
+        <div class="stat-sub">120 WETH Collateral Stored</div>
+      </div>
+
+      <div class="glass-panel stat-card">
+        <div class="stat-label">
+          <span>Available USDC Pool</span>
+          <span>💧</span>
+        </div>
+        <div id="stat-liquidity" class="stat-value">$150,000</div>
+        <div class="stat-sub">Vault Ready Liquidity</div>
+      </div>
+
+      <div class="glass-panel stat-card">
+        <div class="stat-label">
+          <span>Max Loan-To-Value</span>
+          <span>🛡️</span>
+        </div>
+        <div id="stat-ltv" class="stat-value">75.0%</div>
+        <div class="stat-sub">7,500 BPS Protocol Ceiling</div>
+      </div>
+
+      <div class="glass-panel stat-card">
+        <div class="stat-label">
+          <span>Borrow Interest Rate</span>
+          <span>📈</span>
+        </div>
+        <div id="stat-apr" class="stat-value badge-green">5.00% APR</div>
+        <div class="stat-sub">Simple Linear Accrual (500 BPS)</div>
+      </div>
+    </section>
+
+    <!-- Two-Column Interactive Dashboard -->
+    <div class="dashboard-grid">
+
+      <!-- LEFT COLUMN: User Position & Health Factor -->
+      <section class="glass-panel overview-card">
+        <div class="card-title-row">
+          <h2 class="card-title">
+            <span>📊</span>
+            <span>Position & Risk Health</span>
+          </h2>
+          <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">positions(msg.sender)</span>
+        </div>
+
+        <!-- Health Factor Radial Meter -->
+        <div class="health-gauge-container">
+          <div class="gauge-svg-wrap">
+            <svg class="gauge-svg" viewBox="0 0 170 170">
+              <circle class="gauge-bg" cx="85" cy="85" r="70"></circle>
+              <circle id="gauge-progress" class="gauge-progress" cx="85" cy="85" r="70"></circle>
+            </svg>
+            <div class="gauge-center-text">
+              <span id="health-score" class="gauge-score">3.00</span>
+              <span class="gauge-label">Health Factor</span>
+            </div>
+          </div>
+
+          <div class="health-status-desc">
+            <div id="health-badge" class="health-badge safe">SAFE POSITION</div>
+            <p id="health-explanation" class="health-explanation">
+              Health factor is calculated as (Collateral Value × 75%) / Total Debt. Keep above 1.0 to avoid liquidation.
+            </p>
+          </div>
+        </div>
+
+        <!-- Position Breakdown Table -->
+        <div class="position-details">
+          <!-- Collateral -->
+          <div class="detail-row">
+            <div class="detail-name">
+              <span class="token-icon icon-weth">W</span>
+              <span>Deposited WETH</span>
+            </div>
+            <div style="text-align: right;">
+              <div id="user-collateral-weth" class="detail-val">2.0000 WETH</div>
+              <div id="user-collateral-usd" style="font-size: 0.75rem; color: var(--text-muted);">≈ $4,000.00 USDC</div>
+            </div>
+          </div>
+
+          <!-- Total Debt -->
+          <div class="detail-row">
+            <div class="detail-name">
+              <span class="token-icon icon-usdc">$</span>
+              <span>Total Outstanding Debt</span>
+            </div>
+            <div style="text-align: right;">
+              <div id="user-total-debt" class="detail-val" style="color: #38bdf8;">$1,000.00 USDC</div>
+              <div id="user-debt-breakdown" style="font-size: 0.72rem; color: var(--text-subtle);">Principal: $1,000 | Interest: $0.00</div>
+            </div>
+          </div>
+
+          <!-- Borrow Capacity Used -->
+          <div class="detail-row" style="flex-direction: column; align-items: stretch; gap: 0.4rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+              <span class="detail-name">Borrow Capacity Used</span>
+              <span id="capacity-percent-text" style="font-family: var(--font-mono); font-weight: 600;">33.3% of 75% LTV</span>
+            </div>
+            <div class="progress-track">
+              <div id="capacity-progress-bar" class="progress-fill" style="width: 33.3%;"></div>
+            </div>
+          </div>
+
+          <!-- Remaining Capacity -->
+          <div class="detail-row">
+            <div class="detail-name">
+              <span>⚡</span>
+              <span>Remaining Borrow Limit</span>
+            </div>
+            <div id="user-borrow-capacity" class="detail-val" style="color: #34d399;">$2,000.00 USDC</div>
+          </div>
+
+          <!-- Wallet Balances -->
+          <div class="detail-row" style="background: rgba(0, 0, 0, 0.2);">
+            <div class="detail-name">
+              <span>👛</span>
+              <span>Wallet Available</span>
+            </div>
+            <div style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted);">
+              <span id="user-wallet-weth">3.0000 WETH</span> • <span id="user-wallet-usdc">$3,500 USDC</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Action Terminal -->
+      <section class="glass-panel terminal-card">
+        <!-- Navigation Tabs -->
+        <nav class="tab-nav">
+          <button class="tab-btn active" data-target="tab-deposit">
+            <span>📥</span>
+            <span>Deposit Collateral</span>
+          </button>
+          <button class="tab-btn" data-target="tab-borrow">
+            <span>📤</span>
+            <span>Borrow USDC</span>
+          </button>
+          <button class="tab-btn" data-target="tab-simulator">
+            <span>⏳</span>
+            <span>Time & Oracle Warp</span>
+          </button>
+          <button class="tab-btn" data-target="tab-math">
+            <span>📐</span>
+            <span>Solidity Math</span>
+          </button>
+        </nav>
+
+        <!-- TAB 1: DEPOSIT COLLATERAL -->
+        <div id="tab-deposit" class="tab-pane active">
+          <div class="input-box">
+            <div class="input-header">
+              <span>Amount to Deposit</span>
+              <span>Balance: <span id="deposit-wallet-balance">3.00 WETH</span></span>
+            </div>
+            <div class="input-row">
+              <input id="deposit-amount-input" type="number" step="0.1" min="0" placeholder="0.0" class="token-input">
+              <div class="token-pill">
+                <span class="token-icon icon-weth">W</span>
+                <span>WETH</span>
+              </div>
+            </div>
+            <div class="input-footer">
+              <span id="deposit-value-preview">≈ $0.00</span>
+              <div style="display: flex; gap: 4px;">
+                <button class="quick-amount-btn" data-target="deposit-amount-input" data-percent="25">25%</button>
+                <button class="quick-amount-btn" data-target="deposit-amount-input" data-percent="50">50%</button>
+                <button class="quick-amount-btn" data-target="deposit-amount-input" data-percent="100">MAX</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-row" style="background: rgba(99, 102, 241, 0.05);">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Borrow Capacity Boost</span>
+            <span id="deposit-borrow-preview" style="font-family: var(--font-mono); font-weight: 700; color: #818cf8;">+$0.00 Max Borrow</span>
+          </div>
+
+          <button id="btn-deposit" class="btn btn-primary" style="padding: 1rem;">
+            <span>Deposit WETH Collateral</span>
+            <span>➔</span>
+          </button>
+        </div>
+
+        <!-- TAB 2: BORROW USDC -->
+        <div id="tab-borrow" class="tab-pane">
+          <div class="input-box">
+            <div class="input-header">
+              <span>Amount to Borrow</span>
+              <span id="borrow-max-label">Max Allowed: $2,000.00</span>
+            </div>
+            <div class="input-row">
+              <input id="borrow-amount-input" type="number" step="50" min="0" placeholder="0" class="token-input">
+              <div class="token-pill">
+                <span class="token-icon icon-usdc">$</span>
+                <span>USDC</span>
+              </div>
+            </div>
+            <div class="input-footer">
+              <span id="borrow-safety-preview">Checks 75% LTV & Pool Liquidity</span>
+              <div style="display: flex; gap: 4px;">
+                <button class="quick-amount-btn" data-target="borrow-amount-input" data-percent="25">25%</button>
+                <button class="quick-amount-btn" data-target="borrow-amount-input" data-percent="50">50%</button>
+                <button class="quick-amount-btn" data-target="borrow-amount-input" data-percent="100">MAX</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-row" style="background: rgba(6, 182, 212, 0.05);">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Protocol Liquidity Check</span>
+            <span id="borrow-remaining-preview" style="font-family: var(--font-mono); font-size: 0.8rem; color: #38bdf8;">Available pool: $150,000 USDC</span>
+          </div>
+
+          <button id="btn-borrow" class="btn btn-primary" style="padding: 1rem; background: linear-gradient(135deg, #06b6d4, #0284c7);">
+            <span>Borrow USDC to Wallet</span>
+            <span>➔</span>
+          </button>
+        </div>
+
+        <!-- TAB 3: TIME & ORACLE WARP SIMULATOR (Great for Viva / Presentation) -->
+        <div id="tab-simulator" class="tab-pane">
+          <div class="simulator-box">
+            <div class="simulator-header">
+              <span class="simulator-title">
+                <span>⏱️</span>
+                <span>Fast-Forward Time (Interest Accrual)</span>
+              </span>
+              <span style="font-size: 0.72rem; color: #a5b4fc; font-family: var(--font-mono);">5.00% APR Non-Compounding</span>
+            </div>
+
+            <p style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+              Demonstrate how interest accumulates linearly over time using the contract formula: <code>mulDiv(principal, 500 * elapsed, 10000 * 365 days)</code>.
+            </p>
+
+            <div class="warp-buttons">
+              <button class="warp-btn" data-seconds="2592000" data-label="30 Days">
+                <span>+30 Days</span>
+                <small>≈ +0.41% interest</small>
+              </button>
+              <button class="warp-btn" data-seconds="15768000" data-label="6 Months">
+                <span>+6 Months</span>
+                <small>≈ +2.50% interest</small>
+              </button>
+              <button class="warp-btn" data-seconds="31536000" data-label="1 Year">
+                <span>+1 Year</span>
+                <small>≈ +5.00% interest</small>
+              </button>
+            </div>
+          </div>
+
+          <!-- Price Shock Simulator -->
+          <div class="simulator-box" style="background: rgba(244, 63, 94, 0.05); border-color: rgba(244, 63, 94, 0.25);">
+            <div class="simulator-header">
+              <span class="simulator-title" style="color: #fda4af;">
+                <span>📉</span>
+                <span>Chainlink Price Shock Simulator</span>
+              </span>
+              <span id="shock-price-display" style="font-size: 0.95rem; font-weight: 700; font-family: var(--font-mono); color: #fb7185;">$2,000</span>
+            </div>
+
+            <p style="font-size: 0.78rem; color: var(--text-muted);">
+              Simulate market crashes or rallies to observe real-time Health Factor movements.
+            </p>
+
+            <div class="shock-container">
+              <div class="shock-header">
+                <span>$500 (Extreme Crash)</span>
+                <span>$2,000 (Base)</span>
+                <span>$4,000 (Bull Run)</span>
+              </div>
+              <input id="price-shock-slider" type="range" min="500" max="4000" step="50" value="2000" class="slider-range">
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: SOLIDITY MATH & FORMULA INSPECTOR -->
+        <div id="tab-math" class="tab-pane">
+          <div class="formula-grid">
+            <div class="formula-box">
+              <span class="formula-title">1. Collateral Value (USD)</span>
+              <div class="formula-code">mulDiv(collateralAmount, price, 10 ** (feedDecimals + 12))</div>
+              <p class="formula-desc">Scales 18-decimal WETH with 8-decimal Chainlink feed down to 6-decimal USDC.</p>
+            </div>
+
+            <div class="formula-box">
+              <span class="formula-title">2. Max Borrow Capacity</span>
+              <div class="formula-code">mulDiv(collateralVal, 7500, 10000) - currentDebt</div>
+              <p class="formula-desc">Strictly limits total debt to 75% of collateral value.</p>
+            </div>
+
+            <div class="formula-box">
+              <span class="formula-title">3. Linear Interest Accrual</span>
+              <div class="formula-code">mulDiv(principal, 500 * elapsedTime, 10000 * 365 days)</div>
+              <p class="formula-desc">Calculates 5% APR simple interest without compounding on principal.</p>
+            </div>
+
+            <div class="formula-box">
+              <span class="formula-title">4. Oracle Stale Price Check</span>
+              <div class="formula-code">require(block.timestamp - updatedAt <= 1 days)</div>
+              <p class="formula-desc">Guarantees price freshness from Chainlink aggregator before any transaction.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Smart Contract Architecture & Event Feed Row -->
+    <section class="glass-panel activity-card">
+      <div class="card-title-row">
+        <h2 class="card-title">
+          <span>📜</span>
+          <span>Recent Protocol Events & Transactions</span>
+        </h2>
+        <span style="font-size: 0.78rem; color: var(--text-muted);">Real-time Solidity Event Log</span>
+      </div>
+      <div id="events-container" class="event-list">
+        <!-- Injected dynamically by app.js -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Contract Configuration Modal -->
+  <div id="config-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ Contract Configuration</h3>
+        <button id="close-config-btn" class="modal-close">&times;</button>
+      </div>
+      <p style="font-size: 0.8rem; color: var(--text-muted);">
+        Deploying to local Anvil or Sepolia? Enter your deployed contract addresses below:
+      </p>
+
+      <div class="config-field">
+        <label class="config-label">VaultLend Contract Address</label>
+        <input id="cfg-vault-address" type="text" class="config-input" value="0x5FbDB2315678afecb367f032d93F642f64180aa3">
+      </div>
+
+      <div class="config-field">
+        <label class="config-label">WETH Token Address</label>
+        <input id="cfg-weth-address" type="text" class="config-input" value="0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512">
+      </div>
+
+      <div class="config-field">
+        <label class="config-label">USDC Token Address</label>
+        <input id="cfg-usdc-address" type="text" class="config-input" value="0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0">
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.8rem;">
+        <button id="save-config-btn" class="btn btn-primary">Save Addresses</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="abi.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
